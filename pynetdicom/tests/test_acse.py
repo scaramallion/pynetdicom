@@ -49,13 +49,14 @@ from .encoded_pdu_items import (
     a_release_rq,
     a_release_rp,
     p_data_tf,
+    p_data_tf_n_event_report,
     a_abort,
     a_p_abort,
 )
 from .parrot import ThreadedParrot, ParrotRequest
 
 
-# debug_logger()
+debug_logger()
 
 
 class DummyAssociationSocket:
@@ -2193,6 +2194,67 @@ class TestNegotiateRelease:
 
         assert scp.received[1] == a_release_rq
         assert scp.received[2] == a_release_rp
+
+    def test_release_n_event_report(self):
+        """Tests for #820 - bad behaviour when N-E-R received during release."""
+        # from pynetdicom.dimse_primitives import N_EVENT_REPORT
+        # from pynetdicom.dimse_messages import N_EVENT_REPORT_RQ
+        from pynetdicom.pdu_primitives import P_DATA
+        # from pynetdicom.pdu import P_DATA_TF
+
+        # from pynetdicom.sop_class import PrintJob, PrinterInstance
+        # from pynetdicom.utils import pretty_bytes
+        #
+        # req = N_EVENT_REPORT()
+        # req.MessageID = 1
+        # req.AffectedSOPClassUID = PrintJob
+        # req.AffectedSOPInstanceUID = PrinterInstance
+        # req.EventTypeID = 3
+        #
+        # msg = N_EVENT_REPORT_RQ()
+        # msg.primitive_to_message(req)
+        # msg.context_id = 1
+        #
+        # fragments = msg.encode_msg(1, 0)
+        # p_data = next(fragments)
+
+        # Seemingly two issues
+        # 1. Endless loop in Association.release() - while not self._is_paused.
+        #   related to sending N-EVENT-REPORT-RSP after initiating release
+        # 2. State machine error for Evt9 in Sta7 (P-DATA request primitive during
+        #   first stage of association release
+        commands = [
+            ("recv", None),
+            ("send", a_associate_ac),
+            ("recv", None),  # a-release-rq
+            ("send", p_data_tf_n_event_report),  # Send N-EVENT-REPORT P-DATA
+            # ("send", p_data_tf_n_event_report),  # Send N-EVENT-REPORT P-DATA
+            # ("recv", None),  # a-release-rp
+            ("send", a_release_rp),
+        ]
+        self.scp = scp = self.start_server(commands)
+
+        # with caplog.at_level(logging.DEBUG, logger="pynetdicom"):
+        assoc = self.create_assoc()
+        assoc.start()
+        while not assoc.is_established:
+            time.sleep(0.05)
+
+        print("releasing")
+        assoc.acse.send_release(is_response=False)
+        primitive = P_DATA()
+        primitive.presentation_data_value_list.append([1, p_data_tf_n_event_report])
+
+        assoc.dul.send_pdu(primitive)
+
+        # assoc.release()
+        print("released")
+        assert assoc.is_released
+
+        scp.shutdown()
+
+        # assert scp.received[1] == a_release_rq
+        # assert scp.received[2] == a_release_rp
 
 
 class TestEventHandlingAcceptor:

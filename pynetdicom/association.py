@@ -6,13 +6,7 @@ import os
 from pathlib import Path
 import threading
 import time
-from typing import (
-    Callable,
-    Any,
-    Iterator,
-    TYPE_CHECKING,
-    cast,
-)
+from typing import Callable, Any, Iterator, TYPE_CHECKING, cast
 import warnings
 
 from pydicom import dcmread
@@ -586,10 +580,16 @@ class Association(threading.Thread):
     def release(self) -> None:
         """Initiate association release by send an A-RELEASE request."""
         if self.is_established:
+            # Issue #870: check to see if we have anything left to send
+            pass
+
             # Ensure the reactor is paused so it doesn't
             #   steal incoming ACSE messages
             self._reactor_checkpoint.clear()
+            # One option: add the ACSE timeout here
+            #   But would prefer to first figure out what's happening
             while not self._is_paused:
+                print("uhoh")
                 time.sleep(0.0001)
             LOGGER.info("Releasing Association")
             self.acse.negotiate_release()

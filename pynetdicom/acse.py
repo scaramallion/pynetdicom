@@ -598,7 +598,7 @@ class ACSE:
                 return
 
             # Any other primitive besides A_RELEASE gets trashed
-            elif not isinstance(primitive, A_RELEASE):
+            if not isinstance(primitive, A_RELEASE):
                 # Should only be P-DATA
                 LOGGER.warning(
                     "P-DATA received after Association release, data has been lost"
